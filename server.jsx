@@ -8,6 +8,10 @@ import { createStore, combineReducers } from 'redux';
 import { Provider }                     from 'react-redux';
 import * as reducers                    from 'reducers';
 
+import { applyMiddleware } from 'redux';
+import promiseMiddleware   from 'lib/promiseMiddleware';
+import fetchComponentData from 'lib/fetchComponentData';
+
 const app = express();
 
 app.use((req, res) => {
@@ -16,40 +20,48 @@ app.use((req, res) => {
   Router.run(routes, location, (err, routeState) => {
     const location = new Location(req.path, req.query);
     const reducer  = combineReducers(reducers);
-    const store    = createStore(reducer);
+    const store = applyMiddleware(promiseMiddleware)(createStore)(reducer);
 
     if (err) return console.error(err);
+
     if (!routeState) return res.status(404).end('404');
 
-    const InitialComponent = (
-      <Provider store={store}>
-        {() =>
-          <Router {...routeState} />
-        }
-      </Provider>
-    );
+    function renderView() {
+      const InitialComponent = (
+        <Provider store={store}>
+          {() =>
+            <Router {...routeState} />
+          }
+        </Provider>
+      );
 
-    const initialState = store.getState();
+      const initialState = store.getState();
 
-    const componentHTML = React.renderToString(InitialComponent);
+      const componentHTML = React.renderToString(InitialComponent);
 
-    const HTML = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Isomorphic Redux Demo</title>
-        <script type="application/javascript">
-          window.__INITIAL_STATE__ = ${JSON.stringify(initialState)};
-        </script>
-      </head>
-      <body>
-        <div id="react-view">${componentHTML}</div>
-        <script type="application/javascript" src="/bundle.js"></script>
-      </body>
-  </html>
-`
-    res.end(HTML);
+      const HTML = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Isomorphic Redux Demo</title>
+          <script type="application/javascript">
+            window.__INITIAL_STATE__ = ${JSON.stringify(initialState)};
+          </script>
+        </head>
+        <body>
+          <div id="react-view">${componentHTML}</div>
+          <script type="application/javascript" src="/bundle.js"></script>
+        </body>
+      </html>
+      `
+      return HTML;
+    }
+
+    fetchComponentData(store.dispatch, routeState.components, routeState.params)
+      .then(renderView)
+      .then(html => res.end(html))
+       .catch(err => res.end(err.message));
   });
 });
 

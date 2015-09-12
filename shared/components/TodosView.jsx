@@ -17,6 +17,10 @@ export default class TodosView extends React.Component {
     this.props.editTodo(id, newVal);
   }
 
+  componentDidMount() {
+    this.props.getTodos();
+  }
+
   render() {
     return (
       <div id="todo-list">
